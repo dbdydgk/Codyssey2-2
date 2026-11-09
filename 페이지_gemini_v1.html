@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>모의 주식 거래 시뮬레이터</title>
+  <style>
+    :root {
+      --bg-color: #f4f6f9;
+      --card-bg: #ffffff;
+      --text-main: #1f2937;
+      --text-muted: #6b7280;
+      --border-color: #e5e7eb;
+      --up-color: #ef4444;   /* 한국 주식 시장 관례: 상승 빨강 */
+      --down-color: #3b82f6; /* 한국 주식 시장 관례: 하락 파랑 */
+      --flat-color: #374151;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 24px 16px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* 상단 헤더 */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--card-bg);
+      padding: 20px 24px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background-color 0.15s ease, transform 0.05s ease;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .btn-secondary {
+      background-color: #f3f4f6;
+      color: #374151;
+      border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover {
+      background-color: #e5e7eb;
+    }
+
+    .btn-outline-danger {
+      background-color: #fff;
+      color: var(--danger);
+      border: 1px solid #fca5a5;
+    }
+    .btn-outline-danger:hover {
+      background-color: #fee2e2;
+    }
+
+    /* 자산 요약 대시보드 카드 */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--border-color);
+    }
+
+    .card-title {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .card-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    /* 메인 2단 레이아웃 */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 860px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 테이블 스타일 공통 */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f9fafb;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* 시세 영역 */
+    .ticker-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .timer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: #4b5563;
+      background: #f3f4f6;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 500;
+    }
+
+    .pulsing-dot {
+      width: 8px;
+      height: 8px;
+      background-color: #10b981;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.2); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .text-up {
+      color: var(--up-color);
+      font-weight: 600;
+    }
+
+    .text-down {
+      color: var(--down-color);
+      font-weight: 600;
+    }
+
+    .text-flat {
+      color: var(--flat-color);
+    }
+
+    .flash-up {
+      background-color: #fee2e2 !important;
+      transition: background-color 0.8s ease;
+    }
+
+    .flash-down {
+      background-color: #dbeafe !important;
+      transition: background-color 0.8s ease;
+    }
+
+    /* 주문 폼 */
+    .order-card {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    select, input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input[type="number"]:focus {
+      border-color: var(--primary);
+    }
+
+    .quick-qty-buttons {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .quick-btn {
+      flex: 1;
+      padding: 6px;
+      font-size: 0.8rem;
+      background-color: #f3f4f6;
+      color: #4b5563;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+    }
+
+    .quick-btn:hover {
+      background-color: #e5e7eb;
+    }
+
+    .order-info-box {
+      background-color: #f9fafb;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.875rem;
+      border: 1px dashed var(--border-color);
+    }
+
+    .order-info-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .action-btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn-buy {
+      background-color: var(--up-color);
+      color: white;
+      padding: 12px;
+      font-size: 1rem;
+    }
+    .btn-buy:hover {
+      background-color: #dc2626;
+    }
+
+    .btn-sell {
+      background-color: var(--down-color);
+      color: white;
+      padding: 12px;
+      font-size: 1rem;
+    }
+    .btn-sell:hover {
+      background-color: #2563eb;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 24px;
+      font-size: 0.875rem;
+    }
+
+    .badge-buy {
+      background-color: #fee2e2;
+      color: var(--up-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .badge-sell {
+      background-color: #dbeafe;
+      color: var(--down-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .price-history-pill {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      letter-spacing: -0.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- 상단 헤더 -->
+    <header>
+      <div>
+        <h1>📈 모의 주식 거래 시뮬레이터</h1>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">가상 자금으로 실전 투자 감각을 익혀보세요.</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn-secondary" onclick="resetAccount(false)">계좌 초기화</button>
+        <button class="btn-outline-danger" onclick="resetAccount(true)">전체 초기화 (주가 포함)</button>
+      </div>
+    </header>
+
+    <!-- 계좌 요약 대시보드 -->
+    <section class="dashboard-grid">
+      <div class="card">
+        <div class="card-title">보유 예수금</div>
+        <div class="card-value" id="cashDisplay">10,000,000원</div>
+      </div>
+      <div class="card">
+        <div class="card-title">총 보유 주식 평가액</div>
+        <div class="card-value" id="stockValueDisplay">0원</div>
+      </div>
+      <div class="card">
+        <div class="card-title">총 자산 (예수금 + 평가액)</div>
+        <div class="card-value" id="totalAssetDisplay">10,000,000원</div>
+      </div>
+      <div class="card">
+        <div class="card-title">누적 수익률</div>
+        <div class="card-value text-flat" id="returnRateDisplay">0.00%</div>
+      </div>
+    </section>
+
+    <!-- 메인 거래 및 시세 섹션 -->
+    <section class="main-grid">
+      <!-- 실시간 종목 시세 -->
+      <div class="card">
+        <div class="ticker-header">
+          <h2 style="font-size: 1.15rem; font-weight: 700;">실시간 종목 시세</h2>
+          <span class="timer-badge">
+            <span class="pulsing-dot"></span>
+            3초마다 변동 (<span id="countdown">3</span>s)
+          </span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>종목명</th>
+              <th style="text-align: right;">현재가</th>
+              <th style="text-align: right;">전일 대비</th>
+              <th style="text-align: center;">시세 흐름(최근)</th>
+            </tr>
+          </thead>
+          <tbody id="stockTableBody">
+            <!-- 자바스크립트로 종목 렌더링 -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 주문 컨트롤러 -->
+      <div class="card order-card">
+        <h2 style="font-size: 1.15rem; font-weight: 700;">주문하기 (매수 / 매도)</h2>
+
+        <div class="form-group">
+          <label for="stockSelect">종목 선택</label>
+          <select id="stockSelect" onchange="updateOrderInfo()">
+            <!-- 종목 옵션 -->
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="orderQty">주문 수량</label>
+          <input type="number" id="orderQty" min="1" value="1" oninput="updateOrderInfo()">
+          <div class="quick-qty-buttons">
+            <button type="button" class="quick-btn" onclick="setQuickQty(1)">+1주</button>
+            <button type="button" class="quick-btn" onclick="setQuickQty(10)">+10주</button>
+            <button type="button" class="quick-btn" onclick="handleMaxBuy()">전량 매수</button>
+            <button type="button" class="quick-btn" onclick="handleMaxSell()">전량 매도</button>
+          </div>
+        </div>
+
+        <div class="order-info-box">
+          <div class="order-info-row">
+            <span style="color: var(--text-muted);">1주당 현재가</span>
+            <strong id="orderCurrentPrice">0원</strong>
+          </div>
+          <div class="order-info-row">
+            <span style="color: var(--text-muted);">예상 총 주문금액</span>
+            <strong id="orderTotalAmount" style="color: var(--primary);">0원</strong>
+          </div>
+          <div class="order-info-row">
+            <span style="color: var(--text-muted);">현재 보유 수량</span>
+            <span id="orderOwnedQty">0주</span>
+          </div>
+        </div>
+
+        <div class="action-btn-group">
+          <button class="btn-buy" onclick="executeOrder('BUY')">매수 (Buy)</button>
+          <button class="btn-sell" onclick="executeOrder('SELL')">매도 (Sell)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 보유 포트폴리오 -->
+    <section class="card">
+      <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 12px;">보유 주식 포트폴리오</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>종목명</th>
+            <th style="text-align: right;">보유수량</th>
+            <th style="text-align: right;">매입평균가</th>
+            <th style="text-align: right;">현재가</th>
+            <th style="text-align: right;">평가손익</th>
+            <th style="text-align: right;">수익률</th>
+          </tr>
+        </thead>
+        <tbody id="portfolioTableBody">
+          <!-- 포트폴리오 렌더링 -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 체결 내역 -->
+    <section class="card">
+      <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 12px;">최근 체결 내역 (최대 10건)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>시간</th>
+            <th>구분</th>
+            <th>종목명</th>
+            <th style="text-align: right;">체결수량</th>
+            <th style="text-align: right;">체결단가</th>
+            <th style="text-align: right;">총 체결금액</th>
+          </tr>
+        </thead>
+        <tbody id="tradeHistoryBody">
+          <!-- 체결 내역 렌더링 -->
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    // 1. 초기 종목 기본 데이터 정의
+    const INITIAL_STOCKS = [
+      { id: 'stock_1', name: '가상전자', initialPrice: 80000, volatility: 0.05 },
+      { id: 'stock_2', name: '가상메모리', initialPrice: 1000000, volatility: 0.05 },
+      { id: 'stock_3', name: '알파바이오', initialPrice: 10000, volatility: 0.05 },
+      { id: 'stock_4', name: '키야', initialPrice: 150000, volatility: 0.05 }
+    ];
+
+    const INITIAL_CASH = 10000000;
+
+    // 2. 런타임 상태 관리
+    let cash = INITIAL_CASH;
+    let stocks = [];
+    let portfolio = {}; // { stockId: { qty: 0, totalBuyAmount: 0 } }
+    let tradeHistory = [];
+    let countdownSec = 3;
+    let priceUpdateTimer = null;
+    let countdownTimer = null;
+
+    // 포맷팅 유틸리티
+    function formatKRW(val) {
+      return Number(val).toLocaleString('ko-KR') + '원';
+    }
+
+    function formatNumber(val) {
+      return Number(val).toLocaleString('ko-KR');
+    }
+
+    // 초기화 함수
+    function initSimulator(resetPrices = false) {
+      cash = INITIAL_CASH;
+      portfolio = {};
+      tradeHistory = [];
+
+      INITIAL_STOCKS.forEach(item => {
+        portfolio[item.id] = { qty: 0, totalBuyAmount: 0 };
+      });
+
+      if (resetPrices || stocks.length === 0) {
+        stocks = INITIAL_STOCKS.map(s => ({
+          ...s,
+          currentPrice: s.initialPrice,
+          prevPrice: s.initialPrice,
+          changeRate: 0,
+          historyTrend: ['-']
+        }));
+      }
+
+      renderStockSelectOptions();
+      renderAll();
+      startIntervals();
+    }
+
+    // 종목 선택 드롭다운 렌더링
+    function renderStockSelectOptions() {
+      const select = document.getElementById('stockSelect');
+      const currentSelected = select.value;
+      select.innerHTML = '';
+      stocks.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${formatNumber(s.currentPrice)}원)`;
+        select.appendChild(opt);
+      });
+      if (currentSelected && stocks.some(s => s.id === currentSelected)) {
+        select.value = currentSelected;
+      }
+      updateOrderInfo();
+    }
+
+    // 시세 랜덤 등락 로직 (-5% ~ +5%)
+    function updateStockPrices() {
+      stocks.forEach(stock => {
+        stock.prevPrice = stock.currentPrice;
+
+        // -0.05 ~ +0.05 랜덤 변동
+        const deltaRate = (Math.random() * 0.10) - 0.05;
+        let nextPrice = Math.round(stock.currentPrice * (1 + deltaRate));
+
+        // 최소 100원 단위 절사 및 하한가 100원 방어
+        nextPrice = Math.max(100, Math.round(nextPrice / 10) * 10);
+
+        const diff = nextPrice - stock.prevPrice;
+        stock.changeRate = ((diff / stock.prevPrice) * 100);
+        stock.currentPrice = nextPrice;
+
+        let icon = diff > 0 ? '▲' : (diff < 0 ? '▼' : '-');
+        stock.historyTrend.push(icon);
+        if (stock.historyTrend.length > 5) {
+          stock.historyTrend.shift();
+        }
+
+        // 플래시 애니메이션 트리거
+        const row = document.getElementById(`stock-row-${stock.id}`);
+        if (row) {
+          row.classList.remove('flash-up', 'flash-down');
+          void row.offsetWidth; // reflow
+          if (diff > 0) row.classList.add('flash-up');
+          else if (diff < 0) row.classList.add('flash-down');
+        }
+      });
+
+      renderAll();
+      renderStockSelectOptions();
+    }
+
+    // 렌더링 통합 함수
+    function renderAll() {
+      renderDashboard();
+      renderStockTable();
+      renderPortfolio();
+      renderTradeHistory();
+      updateOrderInfo();
+    }
+
+    // 상단 대시보드 렌더링
+    function renderDashboard() {
+      let totalStockValue = 0;
+
+      stocks.forEach(s => {
+        const holding = portfolio[s.id] || { qty: 0 };
+        totalStockValue += holding.qty * s.currentPrice;
+      });
+
+      const totalAsset = cash + totalStockValue;
+      const totalProfit = totalAsset - INITIAL_CASH;
+      const returnRate = ((totalProfit / INITIAL_CASH) * 100);
+
+      document.getElementById('cashDisplay').textContent = formatKRW(cash);
+      document.getElementById('stockValueDisplay').textContent = formatKRW(totalStockValue);
+      document.getElementById('totalAssetDisplay').textContent = formatKRW(totalAsset);
+
+      const returnElem = document.getElementById('returnRateDisplay');
+      let sign = returnRate > 0 ? '+' : '';
+      returnElem.textContent = `${sign}${returnRate.toFixed(2)}% (${formatKRW(totalProfit)})`;
+
+      returnElem.className = 'card-value ' + (returnRate > 0 ? 'text-up' : returnRate < 0 ? 'text-down' : 'text-flat');
+    }
+
+    // 실시간 종목 테이블 렌더링
+    function renderStockTable() {
+      const tbody = document.getElementById('stockTableBody');
+      tbody.innerHTML = '';
+
+      stocks.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.id = `stock-row-${s.id}`;
+
+        const isUp = s.currentPrice > s.prevPrice;
+        const isDown = s.currentPrice < s.prevPrice;
+        const colorClass = isUp ? 'text-up' : (isDown ? 'text-down' : 'text-flat');
+        const sign = isUp ? '+' : '';
+
+        tr.innerHTML = `
+          <td><strong>${s.name}</strong></td>
+          <td style="text-align: right;" class="${colorClass}">${formatNumber(s.currentPrice)}원</td>
+          <td style="text-align: right;" class="${colorClass}">${sign}${s.changeRate.toFixed(2)}%</td>
+          <td style="text-align: center;" class="price-history-pill">${s.historyTrend.join(' ')}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 보유 포트폴리오 렌더링
+    function renderPortfolio() {
+      const tbody = document.getElementById('portfolioTableBody');
+      tbody.innerHTML = '';
+
+      const heldStocks = stocks.filter(s => (portfolio[s.id]?.qty || 0) > 0);
+
+      if (heldStocks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">현재 보유 중인 주식이 없습니다.</td></tr>`;
+        return;
+      }
+
+      heldStocks.forEach(s => {
+        const item = portfolio[s.id];
+        const avgPrice = Math.round(item.totalBuyAmount / item.qty);
+        const evalValue = item.qty * s.currentPrice;
+        const profit = evalValue - item.totalBuyAmount;
+        const profitRate = ((profit / item.totalBuyAmount) * 100);
+
+        const isUp = profit > 0;
+        const isDown = profit < 0;
+        const colorClass = isUp ? 'text-up' : (isDown ? 'text-down' : 'text-flat');
+        const sign = isUp ? '+' : '';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${s.name}</strong></td>
+          <td style="text-align: right;">${formatNumber(item.qty)}주</td>
+          <td style="text-align: right;">${formatKRW(avgPrice)}</td>
+          <td style="text-align: right;">${formatKRW(s.currentPrice)}</td>
+          <td style="text-align: right;" class="${colorClass}">${sign}${formatKRW(profit)}</td>
+          <td style="text-align: right;" class="${colorClass}">${sign}${profitRate.toFixed(2)}%</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 체결 내역 렌더링
+    function renderTradeHistory() {
+      const tbody = document.getElementById('tradeHistoryBody');
+      tbody.innerHTML = '';
+
+      if (tradeHistory.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">체결된 거래 내역이 없습니다.</td></tr>`;
+        return;
+      }
+
+      tradeHistory.forEach(trade => {
+        const isBuy = trade.type === 'BUY';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="color: var(--text-muted);">${trade.time}</td>
+          <td><span class="${isBuy ? 'badge-buy' : 'badge-sell'}">${isBuy ? '매수' : '매도'}</span></td>
+          <td><strong>${trade.stockName}</strong></td>
+          <td style="text-align: right;">${formatNumber(trade.qty)}주</td>
+          <td style="text-align: right;">${formatKRW(trade.price)}</td>
+          <td style="text-align: right;">${formatKRW(trade.total)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 주문 컨트롤러 정보 업데이트
+    function updateOrderInfo() {
+      const stockId = document.getElementById('stockSelect').value;
+      const stock = stocks.find(s => s.id === stockId);
+      const qtyInput = document.getElementById('orderQty');
+      const qty = parseInt(qtyInput.value, 10) || 0;
+
+      if (!stock) return;
+
+      const currentPriceElem = document.getElementById('orderCurrentPrice');
+      const totalAmountElem = document.getElementById('orderTotalAmount');
+      const ownedQtyElem = document.getElementById('orderOwnedQty');
+
+      const totalOrderAmount = stock.currentPrice * Math.max(0, qty);
+      currentPriceElem.textContent = formatKRW(stock.currentPrice);
+      totalAmountElem.textContent = formatKRW(totalOrderAmount);
+      ownedQtyElem.textContent = `${portfolio[stock.id]?.qty || 0}주`;
+    }
+
+    // 빠른 수량 버튼 조작
+    function setQuickQty(delta) {
+      const qtyInput = document.getElementById('orderQty');
+      const current = parseInt(qtyInput.value, 10) || 0;
+      qtyInput.value = Math.max(1, current + delta);
+      updateOrderInfo();
+    }
+
+    // 전량 매수 계산
+    function handleMaxBuy() {
+      const stockId = document.getElementById('stockSelect').value;
+      const stock = stocks.find(s => s.id === stockId);
+      if (!stock) return;
+
+      const maxCanBuy = Math.floor(cash / stock.currentPrice);
+      if (maxCanBuy <= 0) {
+        alert("현재 보유 예수금으로 매수할 수 있는 수량이 없습니다.");
+        return;
+      }
+      document.getElementById('orderQty').value = maxCanBuy;
+      updateOrderInfo();
+    }
+
+    // 전량 매도 계산
+    function handleMaxSell() {
+      const stockId = document.getElementById('stockSelect').value;
+      const owned = portfolio[stockId]?.qty || 0;
+      if (owned <= 0) {
+        alert("해당 종목의 보유 수량이 없습니다.");
+        return;
+      }
+      document.getElementById('orderQty').value = owned;
+      updateOrderInfo();
+    }
+
+    // 매수 / 매도 체결 실행
+    function executeOrder(type) {
+      const stockId = document.getElementById('stockSelect').value;
+      const stock = stocks.find(s => s.id === stockId);
+      const qtyInput = document.getElementById('orderQty');
+      const qty = parseInt(qtyInput.value, 10);
+
+      if (!stock) return;
+
+      if (isNaN(qty) || qty <= 0) {
+        alert("올바른 수량을 1주 이상 입력해 주세요.");
+        return;
+      }
+
+      const orderTotal = stock.currentPrice * qty;
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+      if (type === 'BUY') {
+        if (cash < orderTotal) {
+          alert(`예수금이 부족합니다!\n필요 금액: ${formatKRW(orderTotal)}\n보유 예수금: ${formatKRW(cash)}`);
+          return;
+        }
+
+        // 매수 체결
+        cash -= orderTotal;
+        portfolio[stock.id].qty += qty;
+        portfolio[stock.id].totalBuyAmount += orderTotal;
+
+        recordTrade({
+          time: timeStr,
+          type: 'BUY',
+          stockName: stock.name,
+          qty: qty,
+          price: stock.currentPrice,
+          total: orderTotal
+        });
+
+      } else if (type === 'SELL') {
+        const currentHolding = portfolio[stock.id].qty;
+        if (currentHolding < qty) {
+          alert(`보유 주식 수량이 부족합니다!\n매도 요청: ${formatNumber(qty)}주\n보유 수량: ${formatNumber(currentHolding)}주`);
+          return;
+        }
+
+        // 매도 체결
+        const avgBuyPrice = portfolio[stock.id].totalBuyAmount / currentHolding;
+        cash += orderTotal;
+        portfolio[stock.id].qty -= qty;
+        portfolio[stock.id].totalBuyAmount -= Math.round(avgBuyPrice * qty);
+
+        if (portfolio[stock.id].qty === 0) {
+          portfolio[stock.id].totalBuyAmount = 0;
+        }
+
+        recordTrade({
+          time: timeStr,
+          type: 'SELL',
+          stockName: stock.name,
+          qty: qty,
+          price: stock.currentPrice,
+          total: orderTotal
+        });
+      }
+
+      renderAll();
+    }
+
+    // 거래 내역 기록 (최대 10건 유지)
+    function recordTrade(tradeObj) {
+      tradeHistory.unshift(tradeObj);
+      if (tradeHistory.length > 10) {
+        tradeHistory.pop();
+      }
+    }
+
+    // 계좌 / 전체 초기화
+    function resetAccount(resetPrices = false) {
+      const msg = resetPrices 
+        ? "전체 초기화를 진행하시겠습니까?\n계좌 자산, 보유 내역 및 모든 주식 시세가 처음 값으로 초기화됩니다."
+        : "계좌를 초기화하시겠습니까?\n예수금 1,000만원으로 복구되며 포트폴리오 및 체결 내역이 삭제됩니다. (현재 시세는 유지)";
+
+      if (confirm(msg)) {
+        initSimulator(resetPrices);
+        alert(resetPrices ? "전체 초기화가 완료되었습니다." : "계좌 초기화가 완료되었습니다.");
+      }
+    }
+
+    // 타이머 가동
+    function startIntervals() {
+      if (priceUpdateTimer) clearInterval(priceUpdateTimer);
+      if (countdownTimer) clearInterval(countdownTimer);
+
+      countdownSec = 3;
+      const countElem = document.getElementById('countdown');
+      if (countElem) countElem.textContent = countdownSec;
+
+      countdownTimer = setInterval(() => {
+        countdownSec -= 1;
+        if (countdownSec <= 0) {
+          countdownSec = 3;
+        }
+        if (countElem) countElem.textContent = countdownSec;
+      }, 1000);
+
+      priceUpdateTimer = setInterval(() => {
+        updateStockPrices();
+      }, 3000);
+    }
+
+    // 페이지 로드 시 초기 실행
+    window.addEventListener('DOMContentLoaded', () => {
+      initSimulator(true);
+    });
+  </script>
+</body>
+</html>

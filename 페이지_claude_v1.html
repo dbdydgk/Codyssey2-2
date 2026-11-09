@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모의 주식 거래 시뮬레이터</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    background: #f4f6f9; color: #222; padding: 16px; line-height: 1.5;
+  }
+  h1 { font-size: 20px; margin-bottom: 12px; }
+  .header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .btns button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; margin-left: 6px; }
+  .btn-reset { background: #ffb74d; color: #fff; }
+  .btn-reset-all { background: #e57373; color: #fff; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; margin: 16px 0; }
+  .card { background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .card .label { font-size: 12px; color: #888; }
+  .card .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .section { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .section h2 { font-size: 15px; margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 6px; text-align: right; border-bottom: 1px solid #eee; }
+  th:first-child, td:first-child { text-align: left; }
+  .up { color: #d32f2f; }
+  .down { color: #1565c0; }
+  .trade-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  select, input { padding: 7px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  .qty-box { display: flex; align-items: center; gap: 4px; }
+  .qty-box button { width: 28px; height: 30px; border: 1px solid #ccc; background: #fafafa; border-radius: 6px; cursor: pointer; }
+  .qty-box input { width: 70px; text-align: center; }
+  .btn-buy { background: #d32f2f; color: #fff; }
+  .btn-sell { background: #1565c0; color: #fff; }
+  .btn-max { background: #607d8b; color: #fff; }
+  .trade-controls button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .msg { margin-top: 8px; font-size: 13px; min-height: 18px; color: #d32f2f; }
+  .hist { font-size: 11px; color: #999; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media(max-width:800px){ .grid-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header-row">
+  <h1>📈 모의 주식 거래 시뮬레이터</h1>
+  <div class="btns">
+    <button class="btn-reset" onclick="resetAccount()">초기화(계좌만)</button>
+    <button class="btn-reset-all" onclick="resetAll()">전체 초기화</button>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="label">보유 예수금</div><div class="value" id="cash">-</div></div>
+  <div class="card"><div class="label">총 보유 주식 평가액</div><div class="value" id="stockVal">-</div></div>
+  <div class="card"><div class="label">총 자산</div><div class="value" id="totalAsset">-</div></div>
+  <div class="card"><div class="label">누적 수익률</div><div class="value" id="returnRate">-</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="section">
+    <h2>실시간 종목 현황</h2>
+    <table>
+      <thead><tr><th>종목</th><th>현재가</th><th>등락률</th><th>최근 흐름</th></tr></thead>
+      <tbody id="marketBody"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>시세 차트</h2>
+    <canvas id="chart" height="180"></canvas>
+  </div>
+</div>
+
+<div class="section">
+  <h2>주문</h2>
+  <div class="trade-controls">
+    <select id="orderSymbol"></select>
+    <div class="qty-box">
+      <button onclick="changeQty(-1)">-</button>
+      <input type="number" id="orderQty" value="1" min="1">
+      <button onclick="changeQty(1)">+</button>
+    </div>
+    <button class="btn-buy" onclick="buy()">매수</button>
+    <button class="btn-sell" onclick="sell()">매도</button>
+    <button class="btn-max" onclick="buyMax()">전량 매수</button>
+    <button class="btn-max" onclick="sellMax()">전량 매도</button>
+  </div>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="grid-2">
+  <div class="section">
+    <h2>보유 포트폴리오</h2>
+    <table>
+      <thead><tr><th>종목</th><th>수량</th><th>평단가</th><th>평가손익</th><th>수익률</th></tr></thead>
+      <tbody id="portfolioBody"></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>최근 체결 내역 (최대 10건)</h2>
+    <table>
+      <thead><tr><th>종목</th><th>구분</th><th>수량</th><th>체결가</th><th>시간</th></tr></thead>
+      <tbody id="tradeBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ===== 종목 기본 데이터 (하드코딩) =====
+const INITIAL_CASH = 10000000;
+const BASE_STOCKS = [
+  { name: '가상전자',     basePrice: 80000,   volatility: 1 },
+  { name: '가상메모리',   basePrice: 1000000, volatility: 1 },
+  { name: '알파바이오',   basePrice: 10000,   volatility: 1 },
+  { name: '키야',         basePrice: 150000,  volatility: 1 },
+];
+const STORAGE_KEY = 'stockSimState';
+const MAX_HISTORY = 20; // 차트/흐름 보관 개수
+
+// ===== 상태 =====
+let state;
+
+function defaultState() {
+  const prices = {};
+  const priceHistory = {};
+  BASE_STOCKS.forEach(s => {
+    prices[s.name] = s.basePrice;
+    priceHistory[s.name] = [s.basePrice];
+  });
+  return {
+    cash: INITIAL_CASH,
+    prices,                 // 현재가
+    prevPrices: { ...prices }, // 직전가(등락률용)
+    priceHistory,           // 시세 흐름
+    holdings: {},           // { 종목: { qty, avg } }
+    trades: [],             // 체결 내역
+  };
+}
+
+function load() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try { state = JSON.parse(raw); }
+    catch(e) { state = defaultState(); }
+  } else {
+    state = defaultState();
+  }
+}
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// ===== 유틸 =====
+const fmt = n => Math.round(n).toLocaleString('ko-KR') + '원';
+const now = () => new Date().toLocaleTimeString('ko-KR', { hour12:false });
+
+// ===== 계산 =====
+function stockValue() {
+  let v = 0;
+  for (const name in state.holdings) {
+    v += state.holdings[name].qty * state.prices[name];
+  }
+  return v;
+}
+function totalAsset() { return state.cash + stockValue(); }
+function returnRate() {
+  return (totalAsset() - INITIAL_CASH) / INITIAL_CASH * 100;
+}
+
+// ===== 시세 갱신 =====
+function updatePrices() {
+  for (const s of BASE_STOCKS) {
+    state.prevPrices[s.name] = state.prices[s.name];
+    const rate = (Math.random() * 10 - 5) / 100; // -5% ~ +5%
+    let next = state.prices[s.name] * (1 + rate);
+    next = Math.max(1, Math.round(next));
+    state.prices[s.name] = next;
+    const h = state.priceHistory[s.name];
+    h.push(next);
+    if (h.length > MAX_HISTORY) h.shift();
+  }
+  maybeEarningsSurprise();
+  save();
+  render();
+  updateChart();
+}
+
+// ===== 어닝 서프라이즈 랜덤 이벤트 =====
+function maybeEarningsSurprise() {
+  if (Math.random() < 0.05) { // 약 5% 확률
+    const s = BASE_STOCKS[Math.floor(Math.random() * BASE_STOCKS.length)];
+    state.prices[s.name] = Math.round(state.prices[s.name] * 1.15);
+    const h = state.priceHistory[s.name];
+    h[h.length - 1] = state.prices[s.name];
+    setTimeout(() => alert(`🎉 어닝 서프라이즈! '${s.name}' 종목이 +15% 급등했습니다!`), 10);
+  }
+}
+
+// ===== 거래 =====
+function buy() {
+  const name = document.getElementById('orderSymbol').value;
+  const qty = parseInt(document.getElementById('orderQty').value, 10);
+  if (!qty || qty < 1) return msg('수량을 1 이상 입력하세요.');
+  const price = state.prices[name];
+  const cost = price * qty;
+  if (cost > state.cash) return msg('예수금이 부족합니다. (필요: ' + fmt(cost) + ')');
+
+  state.cash -= cost;
+  const h = state.holdings[name] || { qty: 0, avg: 0 };
+  const newQty = h.qty + qty;
+  h.avg = (h.avg * h.qty + price * qty) / newQty; // 평단가 재계산
+  h.qty = newQty;
+  state.holdings[name] = h;
+  addTrade(name, '매수', qty, price);
+  msg('');
+  save(); render();
+}
+
+function sell() {
+  const name = document.getElementById('orderSymbol').value;
+  const qty = parseInt(document.getElementById('orderQty').value, 10);
+  if (!qty || qty < 1) return msg('수량을 1 이상 입력하세요.');
+  const h = state.holdings[name];
+  if (!h || h.qty < qty) return msg('보유 수량이 부족합니다. (보유: ' + (h ? h.qty : 0) + '주)');
+
+  const price = state.prices[name];
+  state.cash += price * qty;
+  h.qty -= qty;
+  if (h.qty === 0) delete state.holdings[name];
+  addTrade(name, '매도', qty, price);
+  msg('');
+  save(); render();
+}
+
+function buyMax() {
+  const name = document.getElementById('orderSymbol').value;
+  const price = state.prices[name];
+  const maxQty = Math.floor(state.cash / price);
+  if (maxQty < 1) return msg('예수금으로 매수 가능한 수량이 없습니다.');
+  document.getElementById('orderQty').value = maxQty;
+  buy();
+}
+
+function sellMax() {
+  const name = document.getElementById('orderSymbol').value;
+  const h = state.holdings[name];
+  if (!h || h.qty < 1) return msg('보유 수량이 없습니다.');
+  document.getElementById('orderQty').value = h.qty;
+  sell();
+}
+
+function addTrade(name, type, qty, price) {
+  state.trades.unshift({ name, type, qty, price, time: now() });
+  if (state.trades.length > 10) state.trades.pop(); // 최대 10건
+}
+
+function changeQty(delta) {
+  const input = document.getElementById('orderQty');
+  let v = parseInt(input.value, 10) || 1;
+  v = Math.max(1, v + delta);
+  input.value = v;
+}
+
+function msg(text) {
+  document.getElementById('msg').textContent = text;
+}
+
+// ===== 초기화 =====
+function resetAccount() {
+  if (!confirm('계좌(예수금·보유주식·거래내역)를 초기화합니다. 시세는 유지됩니다.')) return;
+  state.cash = INITIAL_CASH;
+  state.holdings = {};
+  state.trades = [];
+  save(); render();
+}
+
+function resetAll() {
+  if (!confirm('전체 초기화합니다. 계좌와 모든 종목 주가가 처음 값으로 리셋됩니다.')) return;
+  state = defaultState();
+  save(); render(); initChart();
+}
+
+// ===== 렌더링 =====
+function render() {
+  // 대시보드
+  document.getElementById('cash').textContent = fmt(state.cash);
+  document.getElementById('stockVal').textContent = fmt(stockValue());
+  document.getElementById('totalAsset').textContent = fmt(totalAsset());
+  const rr = returnRate();
+  const rrEl = document.getElementById('returnRate');
+  rrEl.textContent = (rr >= 0 ? '+' : '') + rr.toFixed(2) + '%';
+  rrEl.className = 'value ' + (rr > 0 ? 'up' : rr < 0 ? 'down' : '');
+
+  // 종목 현황
+  const mb = document.getElementById('marketBody');
+  mb.innerHTML = '';
+  for (const s of BASE_STOCKS) {
+    const cur = state.prices[s.name];
+    const prev = state.prevPrices[s.name];
+    const diff = (cur - prev) / prev * 100;
+    const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
+    const hist = state.priceHistory[s.name]
+      .slice(-6)
+      .map(p => p.toLocaleString('ko-KR'))
+      .join(' → ');
+    mb.innerHTML += `<tr>
+      <td>${s.name}</td>
+      <td class="${cls}">${fmt(cur)}</td>
+      <td class="${cls}">${diff >= 0 ? '+' : ''}${diff.toFixed(2)}%</td>
+      <td class="hist">${hist}</td>
+    </tr>`;
+  }
+
+  // 포트폴리오
+  const pb = document.getElementById('portfolioBody');
+  pb.innerHTML = '';
+  const names = Object.keys(state.holdings);
+  if (names.length === 0) {
+    pb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa">보유 종목이 없습니다.</td></tr>';
+  } else {
+    for (const name of names) {
+      const h = state.holdings[name];
+      const cur = state.prices[name];
+      const profit = (cur - h.avg) * h.qty;
+      const pr = (cur - h.avg) / h.avg * 100;
+      const cls = profit > 0 ? 'up' : profit < 0 ? 'down' : '';
+      pb.innerHTML += `<tr>
+        <td>${name}</td>
+        <td>${h.qty.toLocaleString('ko-KR')}</td>
+        <td>${fmt(h.avg)}</td>
+        <td class="${cls}">${profit >= 0 ? '+' : ''}${fmt(profit)}</td>
+        <td class="${cls}">${pr >= 0 ? '+' : ''}${pr.toFixed(2)}%</td>
+      </tr>`;
+    }
+  }
+
+  // 체결 내역
+  const tb = document.getElementById('tradeBody');
+  tb.innerHTML = '';
+  if (state.trades.length === 0) {
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa">체결 내역이 없습니다.</td></tr>';
+  } else {
+    for (const t of state.trades) {
+      const cls = t.type === '매수' ? 'up' : 'down';
+      tb.innerHTML += `<tr>
+        <td>${t.name}</td>
+        <td class="${cls}">${t.type}</td>
+        <td>${t.qty.toLocaleString('ko-KR')}</td>
+        <td>${fmt(t.price)}</td>
+        <td>${t.time}</td>
+      </tr>`;
+    }
+  }
+}
+
+// ===== 차트 =====
+let chart;
+const COLORS = ['#d32f2f', '#1565c0', '#2e7d32', '#f9a825'];
+
+function initChart() {
+  const ctx = document.getElementById('chart').getContext('2d');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: state.priceHistory[BASE_STOCKS[0].name].map((_, i) => i + 1),
+      datasets: BASE_STOCKS.map((s, i) => ({
+        label: s.name,
+        data: state.priceHistory[s.name].slice(),
+        borderColor: COLORS[i],
+        backgroundColor: COLORS[i],
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      })),
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: { y: { ticks: { callback: v => (v/10000).toFixed(0) + '만' } } },
+    },
+  });
+}
+
+function updateChart() {
+  if (!chart) return;
+  const len = state.priceHistory[BASE_STOCKS[0].name].length;
+  chart.data.labels = Array.from({ length: len }, (_, i) => i + 1);
+  BASE_STOCKS.forEach((s, i) => {
+    chart.data.datasets[i].data = state.priceHistory[s.name].slice();
+  });
+  chart.update('none');
+}
+
+// ===== 초기 구동 =====
+function initOrderSelect() {
+  const sel = document.getElementById('orderSymbol');
+  sel.innerHTML = '';
+  BASE_STOCKS.forEach(s => {
+    sel.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+  });
+}
+
+load();
+initOrderSelect();
+render();
+initChart();
+setInterval(updatePrices, 3000); // 3초 주기 시세 갱신
+</script>
+</body>
+</html>
